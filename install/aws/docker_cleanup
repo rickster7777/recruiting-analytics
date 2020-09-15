@@ -1,0 +1,15 @@
+#!/bin/bash
+echo ""
+echo "***** RA's Docker clean up script *****"
+date
+
+echo "https://docs.docker.com/engine/reference/commandline/system_prune/"
+docker rm -f ra_server || true
+docker system prune -f
+
+
+# echo "This step is only required in case of a new server"
+# echo "that also when RA-System deployment is not done before this deployment since that would create"
+# echo "the network automatically"
+# echo "Running --> docker network create ra-network"
+# docker network create ra-network || true

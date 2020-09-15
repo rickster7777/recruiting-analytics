@@ -1,0 +1,56 @@
+#!/bin/bash
+
+echo ""
+echo "***** RA's Docker build script *****"
+date
+
+echo $DEPLOYMENT_GROUP_NAME
+
+if [ "$DEPLOYMENT_GROUP_NAME" == "Ra-Dev-Deployment-Group" ]
+then
+    export build_environment=DEV
+fi
+
+if [ "$DEPLOYMENT_GROUP_NAME" == "Ra-Qa-Deployment-Group" ]
+then
+    export build_environment=QA
+fi
+
+if [ "$DEPLOYMENT_GROUP_NAME" == "Ra-Uat-Deployment-Group" ]
+then
+    export build_environment=UAT
+fi
+
+if [ "$DEPLOYMENT_GROUP_NAME" == "Ra-Prod-Deployment-Group" ]
+then
+    export build_environment=PROD
+fi
+
+echo "build_environment --> ${build_environment}"
+
+cd /tmp
+
+
+echo "Running --> docker build --build-arg build_environment={build_environment} -t ra_apis ."
+docker build --build-arg build_environment=${build_environment} -t ra_apis .
+
+
+echo "Running --> docker run --name ra_server -p 80:80 -p 443:443 -d ra_apis"
+docker run --name ra_server \
+            -v /mnt/ra_logs/supervisor:/var/log/supervisor \
+            -v /mnt/ra_logs/nginx:/var/log/nginx \
+            -p 443:443 \
+            -p 80:80 \
+            -d ra_apis
+
+            
+echo
+echo
+echo "***** Running  Migrations *****"
+docker exec ra_server bash -c 'cd /home/ra/ra;yes "yes" | python3.7 manage.py migrate'
+
+
+echo
+echo
+echo "***** Collecting Static Files *****"
+docker exec ra_server bash -c 'cd /home/ra/ra;yes "yes" | python3.7 manage.py collectstatic --no-input'

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+echo ""
+echo "***** RA Docker clean up script *****"
+date
+
+sudo rm -rf /tmp/{*,.*} || true

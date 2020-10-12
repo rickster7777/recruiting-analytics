@@ -1,0 +1,112 @@
+import requests
+import re
+from bs4 import BeautifulSoup
+from urllib.request import urlopen
+import csv
+
+SITE = 'https://www.maxpreps.com'
+POSITIONS = {"DB", "CB", "S", "SS","FS", "ATH"}
+
+URL = requests.get('https://www.maxpreps.com/search/states_by_sport.aspx?gendersport=boys,football&season=fall')
+SOUP = BeautifulSoup(URL.content, 'html.parser')
+
+STATES = SOUP.findAll('div', {'class': 'states'})
+
+ALL_STATES_LINK = STATES[0].find_all('a', href=True)
+
+STATE_LIST = [state.text for state in ALL_STATES_LINK]
+
+def special_page_parser(state):
+    school_dict = {}
+    for page in range(1,50):        
+        rank_link = "https://www.maxpreps.com/rankings/football/{}/state/{}.htm".format(page, state)
+        
+        rank_url = requests.get(rank_link)
+        rank_soup = BeautifulSoup(rank_url.content, 'html.parser')
+        try:
+            table = rank_soup.find('table',{'class':'mx-grid sortable rankings-grid'})
+            links = table.findAll('a')
+        except:
+            pass            
+        if links:
+            links = links[1:]
+            for each_link in links:
+                school_dict[each_link.attrs['href'].split('/')[2]] = []
+                #roaster_link = SITE + 'roster'.join(each_link.attrs['href'].split('home'))
+                roaster_link = SITE + '/'.join(each_link.attrs['href'].split('/')[:-1]) + '/roster.htm'
+                roaster_url = requests.get(roaster_link)
+                roaster_soup = BeautifulSoup(roaster_url.content, 'html.parser')
+                
+                position_table = roaster_soup.findAll('table', {'id' : "roster"}) 
+                if position_table:
+                    position_table_body = position_table[0].find('tbody')
+                    position_table_rows = position_table_body.find_all('tr')
+                else:
+                    break
+
+                for row in position_table_rows:
+                    cols = row.find_all(['td', 'th'])
+                    try:
+                        pos = set([item.strip() for item in cols[2].text.split(',')])
+                    except IndexError:
+                        pass  
+                    
+                    if set.intersection(POSITIONS, pos):
+                        school_dict[each_link.attrs['href'].split('/')[2]].append((cols[1].text, list(pos)))
+    return school_dict
+
+def main_parser():
+    final_data = {}
+    for state in STATE_LIST:
+        final_data[state] = special_page_parser(state.lower())
+        #print(len(final_data[state]))
+        for k,val in final_data[state].items(): 
+            #for k2, v in val.items():
+                # k2 : schools , v : names and positions 
+            obj = []
+            split_par = k.replace('(',' ').replace(')', ' ')
+            sch_cit_stat = split_par.replace(',', ' ').split()
+            # school = obj.append(sch_cit_stat[0].replace('-', ' ').strip())
+            # city = obj.append(sch_cit_stat[1].replace('-', ' ').strip())
+            # state =  obj.append(sch_cit_stat[2])
+            for v in val:
+                name = v[0]                
+                pos = v[1]
+                obj.append(sch_cit_stat[0].replace('-', ' ').strip())
+                obj.append(sch_cit_stat[1])
+                obj.append(sch_cit_stat[2])
+                obj.append(name)
+                obj.append(pos)
+                with open('/home/rishavk/Desktop/final_states_scraping/players_data.csv', 'a') as toWrite:
+                    writer = csv.writer(toWrite)                        
+                    writer.writerow(obj)
+                print("'{}' data added successfully".format(name))    
+                obj=[]    
+
+
+                
+                # for v2 in v:
+                #     name = v2[0]                
+                #     pos = v2[1][0]
+                #     obj.append(sch_cit_stat[0].replace('-', ' ').strip())
+                #     obj.append(sch_cit_stat[1])
+                #     obj.append(sch_cit_stat[2])
+                #     obj.append(name)
+                #     obj.append(pos)
+                    
+                #     #print(len(obj))
+                #     with open('/home/rishavk/Desktop/final_states_scraping/players_data.csv', 'a') as toWrite:
+                #         writer = csv.writer(toWrite)                        
+                #         writer.writerow(obj)
+                #     print("'{}' data added successfully".format(name))
+                #     obj = []
+                #print(len(obj))
+            # for player in each_school_data:
+            #     if player not in unique_players:
+            #         unique_players.append(each_school_data)
+
+            # print("unique players: ", unique_players)
+         #   print("each school data: ", each_school_data)
+            
+if __name__ == "__main__":
+    main_parser()

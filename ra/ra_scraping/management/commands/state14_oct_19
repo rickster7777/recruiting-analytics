@@ -1,0 +1,122 @@
+import requests
+import re
+from bs4 import BeautifulSoup
+from urllib.request import urlopen
+import csv
+from datetime import datetime
+
+
+now = datetime.now()
+current_time = now.strftime("%H:%M:%S")
+print("start Time =", current_time)
+
+SITE = 'https://www.maxpreps.com'
+POSITIONS = {"DB", "CB", "S", "SS","FS", "ATH"}
+
+URL = requests.get('https://www.maxpreps.com/search/states_by_sport.aspx?gendersport=boys,football&season=fall')
+SOUP = BeautifulSoup(URL.content, 'html.parser')
+
+STATES = SOUP.findAll('div', {'class': 'states'})
+
+ALL_STATES_LINK = STATES[0].find_all('a', href=True)
+
+STATE_LIST = [state.text for state in ALL_STATES_LINK]
+
+def maxpreps_page_parser(state):
+    school_dict = {}
+    for page in range(1,2):
+        if state == 'district-of-columbia':
+            rank_link = "https://www.maxpreps.com/rankings/football/{}/state/washington,-dc.htm".format(page)
+        else:
+            rank_link = "https://www.maxpreps.com/rankings/football/{}/state/{}.htm".format(page, state)
+                
+        rank_url = requests.get(rank_link)
+        rank_soup = BeautifulSoup(rank_url.content, 'html.parser')
+        try:
+            table = rank_soup.find('table',{'class':'mx-grid sortable rankings-grid'})
+            links = table.findAll('a')
+        except AttributeError:
+            pass            
+        if links:
+            links = links[1:]
+            for each_link in links:
+                school_dict[each_link.attrs['href'].split('/')[2]] = []
+                #roaster_link = SITE + 'roster'.join(each_link.attrs['href'].split('home'))
+                roaster_link = SITE + '/'.join(each_link.attrs['href'].split('/')[:-1]) + '/roster.htm'
+                roaster_url = requests.get(roaster_link)
+                roaster_soup = BeautifulSoup(roaster_url.content, 'html.parser')
+                
+                position_table = roaster_soup.findAll('table', {'id' : "roster"}) 
+                if position_table:
+                    position_table_body = position_table[0].find('tbody')
+                    position_table_rows = position_table_body.find_all('tr')
+                else:
+                    break
+
+                for row in position_table_rows:
+                    cols = row.find_all(['td', 'th'])
+                    try:
+                        pos = set([item.strip() for item in cols[2].text.split(',')])
+                    except IndexError:
+                        pass  
+                    
+                    if set.intersection(POSITIONS, pos):
+                        school_dict[each_link.attrs['href'].split('/')[2]].append((cols[1].text, list(pos)))
+    return school_dict
+
+def main_parser():
+    final_data = {}
+    state_copy = {}
+    iterate_states = []
+    # STATE_LIST = ['alabama','alaska','arizona','arkansas','california','colorado',
+    #              'connecticut','delaware','washington,-dc','florida','georgia','hawaii',
+    #               'idaho','illinois','indiana','iowa','kansas','kentucky','louisiana','maine','maryland',
+    #               'massachusetts','michigan','minnesota','mississippi','missouri','montana',
+    #               'nebraska', 'nevada','new-hampshire','new-Jersey','new-mexico' ,'new-york' ,'north-carolina' ,'north-dakota', 'ohio' ,
+    #               'oklahoma','oregon','pennsylvania','prep-schools',
+    #               'rhode-island','south-carolina','south-dakota','tennessee','texas','utah'
+    #                'vermont','virginia','washington','west-virginia','wisconsin' ,'wyoming'
+    #                 ]
+    iterate_states = STATE_LIST.pop() 
+
+    for state in STATE_LIST:       
+        final_data[state] = maxpreps_page_parser(state.replace(' ','-').lower())
+        # states_copy = final_data[state].copy()
+        
+        # iterate_states.append(state)
+        for k,val in final_data[state].items():
+            #print(k)
+            #iterate_states.append(k)
+            #for k2, v in val.items():
+
+        #         # k2 : schools , v : names and positions 
+            obj = []
+            split_par = k.replace('(',' ').replace(')', ' ')
+            sch_cit_stat = split_par.replace(',', ' ').split()
+            for v in val:
+                name = v[0]                
+                pos = str(v[1]).replace('[','').replace(']', '').replace('\'','')
+                obj.append(sch_cit_stat[0].replace('-', ' ').strip())
+                obj.append(sch_cit_stat[1].replace('-',' ').strip())
+                obj.append(sch_cit_stat[2])
+                obj.append(name)
+                obj.append(pos)
+                with open('/home/rishavk/Desktop/final_states_scraping/players2.csv', 'a') as toWrite:
+                    writer = csv.writer(toWrite)                        
+                    writer.writerow(obj)
+                #print("'{}' data added successfully".format(name))    
+                obj=[]                   
+            
+            
+            
+            #print(len(final_data[state]))
+            #state_copy = final_data.copy()
+            #if state not in state_copy:
+        
+
+   
+if __name__ == "__main__":
+    main_parser()
+
+
+print("End Time =", current_time)
